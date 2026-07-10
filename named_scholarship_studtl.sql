@@ -45,13 +45,14 @@ with aidy as (
         b.rfrbase_detail_code as detl_code,
         d.adrfund_desg as desg_no,
         d.adbdesg_name as desg_name,
-        a.rprawrd_accept_amt as amt
+        a.rprawrd_accept_amt as acpt,
+        a.rprawrd_paid_amt as paid
     from rprawrd a
     join rfrbase b on b.rfrbase_fund_code = a.rprawrd_fund_code and b.rfrbase_active_ind = 'Y'
     left join desg d on d.adrfund_fa_fund_code = a.rprawrd_fund_code
     join acct c on c.tbracct_detail_code = b.rfrbase_detail_code
     where a.rprawrd_awst_code = 'ACPT'
-    and a.rprawrd_accept_amt > 0
+    and a.rprawrd_accept_amt >= 0
 ), emails as (
     select * from (
         select goremal_pidm as pidm, goremal_emal_code, goremal_email_address
@@ -160,7 +161,8 @@ select
     a.detl_code,
     a.desg_no,
     a.desg_name,
-    a.amt, 
+    a.acpt,
+    a.paid, 
     (select to_char(sysdate, 'MM/DD/YYYY HH:MI:SS') from dual) as last_update
 from awards a
 join emails e on e.pidm = a.pidm
