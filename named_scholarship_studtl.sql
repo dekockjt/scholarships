@@ -1,6 +1,5 @@
 -- request from Eddie for Allaina in development 7/1/2026
 -- student detail awarded under a fund code that joins to a tbracct_a_fund_code starting with '2' or '4'
-
 with aidy as (
     select to_char(sysdate - 365, 'YY') || to_char(sysdate, 'YY') as aidy
     from dual
@@ -173,67 +172,145 @@ join stu s on s.pidm = a.pidm and s.eff_term = (
     from sgbstdn z
     where z.sgbstdn_pidm = a.pidm
     and z.sgbstdn_term_code_eff <= robinst_aidy_end_year || '20'
+    and z.sgbstdn_stst_code in ('AS', 'IL', 'P1')
 )
 left join addr r on r.pidm = a.pidm
 left join sprt sp on sp.pidm = a.pidm and sp.aidy = a.aidy
 where a.aidy in (select aidy from aidy)
 ;
 
--- requested a sports field 7/6/2026
-select spriden_first_name, spriden_last_name
-from sgrsprt 
-join spriden on spriden_pidm = sgrsprt_pidm and spriden_change_ind is null
-where sgrsprt_term_code in ('202610', '202620') 
-and sgrsprt_spst_code = 'A'
-and sgrsprt_actc_code = 'BSKTBALM';
 
-select 
-    sgrsprt_pidm as pidm, 
-    sgrsprt_term_code as term,
-    sgrsprt_actc_code as sport
-from sgrsprt
-where sgrsprt_spst_code = 'A'
-;
-
-select 
-    sgrsprt_pidm as pidm,
-    sgrsprt_actc_code as sport,
-    case 
-        when substr(sgrsprt_term_code,5,2) = '10' -- Fall
-            then substr(sgrsprt_term_code,3,2) 
-                 || substr(to_char(to_number(substr(sgrsprt_term_code,1,4)) + 1),3,2)
-        else -- Spring/Summer
-            substr(to_char(to_number(substr(sgrsprt_term_code,1,4)) - 1),3,2)
-            || substr(sgrsprt_term_code,3,2)
-    end as aid_year
-from sgrsprt
-where sgrsprt_spst_code = 'A'
-;
-
-select
-    pidm,
-    aid_year,
-    listagg(sport, ', ') within group (order by sport) as sports
-from (
-    select distinct pidm, aid_year, sport
-    from (
-        select 
-            sgrsprt_pidm as pidm,
-            stvactc_desc as sport,
-            case 
-                when substr(sgrsprt_term_code,5,2) = '10'
-                    then substr(sgrsprt_term_code,3,2) 
-                        || substr(to_char(to_number(substr(sgrsprt_term_code,1,4)) + 1),3,2)
-                else
-                    substr(to_char(to_number(substr(sgrsprt_term_code,1,4)) - 1),3,2)
-                    || substr(sgrsprt_term_code,3,2)
-            end as aid_year
-        from sgrsprt
-        join stvactc on stvactc_code = sgrsprt_actc_code
-        where sgrsprt_spst_code = 'A'
-    )
+select * from (
+    select
+        adrfund_fa_fund_code,
+        b.rfrbase_detail_code,
+        adrfund_desg,
+        adbdesg_name
+        -- row_number() over (
+        --     partition by adrfund_fa_fund_code order by adrfund_activity_date asc
+        -- ) as rn
+    from adrfund
+    join adbdesg on adbdesg_desg = adrfund_desg
+    join rfrbase b on b.rfrbase_fund_code = adrfund_fa_fund_code and b.rfrbase_active_ind = 'Y'
+    where adrfund_fa_fund_code = 'YDPR93'
 )
-group by pidm, aid_year
-order by aid_year, pidm
+-- where rn = 1
 ;
-select * from stvactc order by stvactc_code;
+
+ select * from (
+        select
+            tbracct_detail_code,
+            tbracct_a_fund_code
+            -- row_number() over ( -- most recent effective date for the detail code
+            --     partition by tbracct_detail_code order by tbracct_detc_eff_date desc
+            -- ) as rn
+        from tbracct
+        where (
+            tbracct_a_fund_code like '2%' or tbracct_a_fund_code like '4%'
+        )
+        and tbracct_detail_code = 'Y707'
+    );
+    -- where rn = 1
+
+    select * from rprawrd where rprawrd_fund_code = 'YDP707' and rprawrd_aidy_code = '2526';
+with aidy as (
+    select to_char(sysdate - 365, 'YY') || to_char(sysdate, 'YY') as aidy
+    from dual
+    where to_char(sysdate, 'MM') <= '08'
+    union all
+    select to_char(sysdate, 'YY') || to_char(sysdate + 365, 'YY')
+    from dual
+    where to_char(sysdate, 'MM') >= '07'
+), acct as (
+    select * from (
+        select
+            tbracct_detail_code,
+            tbracct_a_fund_code,
+            row_number() over ( -- most recent effective date for the detail code
+                partition by tbracct_detail_code order by tbracct_detc_eff_date desc
+            ) as rn
+        from tbracct
+        where (
+            tbracct_a_fund_code like '2%' or tbracct_a_fund_code like '4%'
+        )
+    )
+    where rn = 1
+), desg as (
+    select * from (
+        select
+            adrfund_fa_fund_code,
+            adrfund_desg,
+            adbdesg_name,
+            row_number() over (
+                partition by adrfund_fa_fund_code order by adrfund_activity_date desc
+            ) as rn
+        from adrfund
+        join adbdesg on adbdesg_desg = adrfund_desg
+    )
+    where rn = 1
+), awards as (
+    select 
+        a.rprawrd_pidm as pidm,
+        a.rprawrd_aidy_code as aidy,
+        a.rprawrd_fund_code as fund_sfs,
+        c.tbracct_a_fund_code as fund_dev,
+        b.rfrbase_detail_code as detl_code,
+        d.adrfund_desg as desg_no,
+        d.adbdesg_name as desg_name,
+        a.rprawrd_accept_amt as acpt,
+        a.rprawrd_paid_amt as paid
+    from rprawrd a
+    join rfrbase b on b.rfrbase_fund_code = a.rprawrd_fund_code and b.rfrbase_active_ind = 'Y'
+    left join desg d on d.adrfund_fa_fund_code = a.rprawrd_fund_code
+    join acct c on c.tbracct_detail_code = b.rfrbase_detail_code
+    where a.rprawrd_awst_code = 'ACPT'
+    and a.rprawrd_accept_amt >= 0
+    and rprawrd_fund_code = 'YDP707' and rprawrd_aidy_code = '2526'
+)
+  select * from awards;
+
+  select * from (
+        select goremal_pidm as pidm, goremal_emal_code, goremal_email_address
+        from goremal
+        where goremal_status_ind = 'A'
+        and goremal_emal_code in ('SLU', 'PERS')
+        and goremal_pidm = 1453261
+    )
+    pivot(
+        min(goremal_email_address) 
+        for goremal_emal_code in ('SLU' as email_slu, 'PERS' as email_pers)
+    )
+    ;
+    
+select
+        a.sgbstdn_pidm as pidm,
+        a.sgbstdn_term_code_eff as eff_term,
+        a.sgbstdn_levl_code as levl,
+        a.sgbstdn_coll_code_1 as coll_1_cde,
+        c.stvcoll_desc as coll_1,
+        a.sgbstdn_coll_code_2 as coll_2_cde,
+        c2.stvcoll_desc as coll_2,
+        a.sgbstdn_majr_code_1 as majr_1_cde,
+        m.stvmajr_desc as majr_1,
+        a.sgbstdn_majr_code_2 as majr_2_cde,
+        m2.stvmajr_desc as majr_2,
+        a.sgbstdn_majr_code_minr_1 as minr_1_cde,
+        n.stvmajr_desc as minr_1,
+        a.sgbstdn_majr_code_minr_2 as minr_2_cde,
+        n2.stvmajr_desc as minr_2,
+        a.sgbstdn_majr_code_conc_1 as conc_1_cde,
+        cn.stvmajr_desc as conc_1,
+        a.sgbstdn_majr_code_conc_2 as conc_2_cde,
+        cn2.stvmajr_desc as conc_2,
+        a.sgbstdn_exp_grad_date as exp_grad
+    from sgbstdn a
+    left join stvcoll c on c.stvcoll_code = a.sgbstdn_coll_code_1
+    left join stvcoll c2 on c2.stvcoll_code = a.sgbstdn_coll_code_2
+    left join stvmajr m on m.stvmajr_code = a.sgbstdn_majr_code_1
+    left join stvmajr m2 on m2.stvmajr_code = a.sgbstdn_majr_code_2
+    left join stvmajr n on n.stvmajr_code = a.sgbstdn_majr_code_minr_1
+    left join stvmajr n2 on n2.stvmajr_code = a.sgbstdn_majr_code_minr_2
+    left join stvmajr cn on cn.stvmajr_code = a.sgbstdn_majr_code_conc_1
+    left join stvmajr cn2 on cn2.stvmajr_code = a.sgbstdn_majr_code_conc_2
+    where a.sgbstdn_stst_code in ('AS', 'IL', 'P1')
+    and a.sgbstdn_pidm = 1453261;
